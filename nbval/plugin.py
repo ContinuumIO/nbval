@@ -13,6 +13,7 @@ import sys
 import re
 import hashlib
 import warnings
+import traceback
 from collections import OrderedDict, defaultdict
 
 # for python 3 compatibility
@@ -28,13 +29,8 @@ import nbformat
 from nbformat import NotebookNode
 
 # Kernel for running notebooks
-from .kernel import RunningKernel, CURRENT_ENV_KERNEL_NAME
+from .kernel import RunningKernel, CURRENT_ENV_KERNEL_NAME, DATA_MIME_TYPE
 from .cover import setup_coverage, teardown_coverage
-
-
-# TODO: integrate properly with pytest plugins/commandline
-import loading
-import comparing
 
 
 # define colours for pretty outputs
@@ -88,6 +84,18 @@ def pytest_addoption(parser):
                     type=float,
                     help='Timeout for cell execution, in seconds.')
 
+    # I've tried to copy the style above. --nbval-x for things that
+    # run nbval a certain way (mutually exclusive); --x for things
+    # that apply to nbval. Maybe. Not sure it's the best idea or that
+    # things were consistent before.
+    group.addoption('--nbval-require-ref-data', action='store_true',
+                    help='Require that cells have reference data.')
+    
+    # TODO: might want multiple files
+    group.addoption('--data-handlers',
+                    help='Functions xxx...')
+    
+
     term_group = parser.getgroup("terminal reporting")
     term_group._addoption(
         '--nbdime', action='store_true',
@@ -106,10 +114,10 @@ def pytest_collect_file(path, parent):
     Collect IPython notebooks using the specified pytest hook
     """
     opt = parent.config.option
-
-    # TODO: add a --no-generate option, maybe?
-
-    if (opt.nbval or opt.nbval_lax) and path.fnmatch("*[!nbval].ipynb"):
+    # TODO: add a --no-generate option, maybe? And make this pattern
+    # standard/configurable.
+    # match .ipynb except .nbval.ipynb
+    if (opt.nbval or opt.nbval_lax or opt.nbval_require_ref_data) and re.match("^((?!\.nbval).)*\.ipynb$",path.strpath,re.IGNORECASE):
         return IPyNbFile(path, parent)
 
 
@@ -212,8 +220,9 @@ class IPyNbFile(pytest.File):
             'execution_count',
         )
         if not config.option.nbdime:
-            # TODO: only working on the 'data' bit for now
-            self.skip_compare = self.skip_compare + ('image/png', 'image/jpeg', 'text/html')
+            # TODO: not to do with data tests; should probably allow a
+            # user file for this
+            self.skip_compare = self.skip_compare + ('image/png', 'image/jpeg', 'text/html', 'application/javascript', 'application/vnd.bokehjs_load.v0+json')
 
     kernel = None
 
@@ -230,8 +239,16 @@ class IPyNbFile(pytest.File):
                 'kernelspec', {}).get('name', 'python')
         self.kernel = RunningKernel(kernel_name, str(self.fspath.dirname))
         self.setup_sanitize_files()
+        self.setup_data_handlers()
+
         if getattr(self.parent.config.option, 'cov_source', None):
             setup_coverage(self.parent.config, self.kernel, getattr(self, "fspath", None))
+
+
+    def setup_data_handlers(self):
+        if self.parent.config.option.data_handlers is not None:
+            # TODO: probably need to handle path better
+            exec(open(self.parent.config.option.data_handlers).read())
 
 
     def setup_sanitize_files(self):
@@ -322,6 +339,70 @@ class IPyNbFile(pytest.File):
             self.kernel.stop()
 
 
+############################################################
+
+##### comparing
+
+import inspect            
+comparers = {}
+def default_comparer(test,ref):
+    if test!=ref:
+        raise AssertionError("%s != %s"%(test,ref))
+
+def compare(test,ref):
+
+    def get_comparer(x):
+        for class_ in inspect.getmro(x)[::-1]:
+            if class_ in comparers:
+                return comparers[class_]
+        return default_comparer
+
+    comparer = get_comparer(type(ref))
+    return comparer(test,ref)
+
+############################################################
+
+##### loading
+
+import pickle
+import base64
+
+loaders = {}
+loaders[DATA_MIME_TYPE] = pickle.loads
+
+def get_loader(mime_type):
+
+    def loader(x):
+        if mime_type in loaders:
+            return loaders[mime_type](base64.b64decode(x['data'].encode('utf-8')))
+        else:
+            return x
+
+    return loader
+
+############################################################
+
+##### dumping
+
+import pickle
+import base64
+
+dumpers = {}
+
+dumpers[object] = pickle.dumps
+
+def get_dumper(handler):
+
+    def dumper(x):
+        return {'data': base64.b64encode(handler(x)).decode('utf-8')}
+
+    return dumper
+
+############################################################
+
+
+
+
 class IPyNbCell(pytest.Item):
     def __init__(self, name, parent, cell_num, cell, options):
         super(IPyNbCell, self).__init__(name, parent)
@@ -387,7 +468,7 @@ class IPyNbCell(pytest.Item):
         # a key.
         testing_outs = defaultdict(list)
         reference_outs = defaultdict(list)
-
+        
         for reference in ref:
             for key in reference.keys():
                 # We discard the keys from the skip_compare list:
@@ -406,6 +487,11 @@ class IPyNbCell(pytest.Item):
                         # existing ones to be compared
                         reference_outs[key].append(self.sanitize(reference[key]))
 
+        if len(reference_outs) > 0 and self.parent.config.option.nbval_require_ref_data:
+            if DATA_MIME_TYPE not in reference_outs:
+                self.raise_cell_error("Missing reference data.")
+                # the end
+                        
         # the same for the testing outputs (the cells that are being executed)
         for testing in test:
             for key in testing.keys():
@@ -445,9 +531,6 @@ class IPyNbCell(pytest.Item):
                     + "<<<<<<<<<<<< Reference outputs from ipynb file:"
                     + bcolors.ENDC
                 )
-                # TODO: need a way to hook in something to show
-                # differences. E.g. you'd want the output of
-                # assert_array_equal.
                 for val in ref_values:
                     self.comparison_traceback.append(_trim_base64(val))
                 self.comparison_traceback.append(
@@ -464,29 +547,32 @@ class IPyNbCell(pytest.Item):
 
             for test_out, ref_out in zip(test_values, ref_values):
                 # Compare the individual values
-                loader = loading.get_handler(key)
-                test_out = loader(test_out)
-                ref_out = loader(ref_out)
-                comparer = comparing.get_handler(type(ref_out))
-                if not comparer(test_out,ref_out):
+                load = get_loader(key)
+                test_out = load(test_out)
+                ref_out = load(ref_out)
+                try:
+                    compare(test_out,ref_out)
+                except:
                     self.comparison_traceback.append(
                         bcolors.OKBLUE
                         + " mismatch '%s'\n" % key
                         + bcolors.FAIL
                         + "<<<<<<<<<<<< Reference output from ipynb file:"
                         + bcolors.ENDC)
-                    self.comparison_traceback.append(_trim_base64(ref_out))
+                    self.comparison_traceback.append(_trim_base64(str(ref_out)))
                     self.comparison_traceback.append(
                         bcolors.FAIL
                         + '============ disagrees with newly computed (test) output:'
                         + bcolors.ENDC)
-                    self.comparison_traceback.append(_trim_base64(test_out))
+                    self.comparison_traceback.append(_trim_base64(str(test_out)))
                     self.comparison_traceback.append(
                         bcolors.FAIL
                         + '>>>>>>>>>>>>'
                         + bcolors.ENDC)
-
+                    self.comparison_traceback.append("\nDetails:")
+                    self.comparison_traceback.append(traceback.format_exc())
                     return False
+
         return True
 
 
@@ -852,10 +938,6 @@ _base64 = re.compile(r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]
 
 def _trim_base64(s):
     """Trim and hash base64 strings"""
-    # TODO: tmp hack - can no longer assume ref_out is always string.
-    # Would rather get some useful diff where possible.
-    if not isinstance(s,str):
-        s = repr(s)
     if len(s) > 64 and _base64.match(s.replace('\n', '')):
         h = hash_string(s)
         s = '%s...<snip base64, md5=%s...>' % (s[:8], h[:16])

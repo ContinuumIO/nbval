@@ -22,6 +22,9 @@ import ipykernel.kernelspec
 
 CURRENT_ENV_KERNEL_NAME = ':nbval-parent-env'
 
+# personal/vanity tree; go for iso standard next
+DATA_MIME_TYPE = 'application/prs.nbval.data.v0+json'
+
 logger = logging.getLogger('nbval')
 # Uncomment to debug kernel communication:
 # logger.setLevel('DEBUG')
@@ -93,14 +96,15 @@ class RunningKernel(object):
         self._ensure_iopub_up()
 
         setup_code = """
-import json
-import dumping
+from IPython.core.formatters import JSONFormatter as JF
+from nbval.plugin import dumpers, get_dumper
 ip = get_ipython()
-json_formatter = ip.display_formatter.formatters['application/json']
+our_formatter = JF()
+ip.display_formatter.formatters['%s'] = our_formatter
+for type_, dumper in dumpers.items():
+    our_formatter.for_type(type_, get_dumper(dumper))
+"""%DATA_MIME_TYPE
 
-for type_, handler in dumping.handlers.items():
-    json_formatter.for_type(type_, handler)
-"""
         self.kc.execute(setup_code,
                         silent=False, #TODO True,
                         store_history=False,
