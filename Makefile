@@ -4,6 +4,7 @@ test:
 	@# Note: to run the tests, we also need additional dependencies
 	@# ("make install-test-deps")
 	py.test -v tests/ --nbval --current-env --sanitize-with tests/sanitize_defaults.cfg --ignore tests/ipynb-test-samples
+	py.test -v tests2/ --nbval --current-env --sanitize-with tests/sanitize_defaults.cfg
 
 build-dists:
 	rm -rf dist/
