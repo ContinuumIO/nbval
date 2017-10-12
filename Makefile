@@ -1,6 +1,10 @@
 PYTHON ?= python3
 
-# TODO: add tests that output matches (maybe store files with expected output?)
+# TODO: add more detailed checks of negative results, i.e. that cells
+# fail as expected. Maybe store files with expected console output
+# from running tests? Right now, if one of the 'negative' commands
+# fails e.g. because a file is missing, we won't see any problems
+# unless we inspect the output.
 
 test:
 	@# Note: to run the tests, we also need additional dependencies

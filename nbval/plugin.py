@@ -221,8 +221,8 @@ class IPyNbFile(pytest.File):
             'execution_count',
         )
         if not config.option.nbdime:
-            # TODO: not to do with data tests; should probably allow a
-            # user file for this
+            # TODO: the additions I've made are not to do with data
+            # tests; should probably allow a user file for this
             self.skip_compare = self.skip_compare + ('image/png', 'image/jpeg', 'text/html', 'application/javascript', 'application/vnd.bokehjs_load.v0+json')
 
     kernel = None
@@ -328,8 +328,7 @@ class IPyNbFile(pytest.File):
 
     def teardown(self):
         # always store the new results; might want to replace the
-        # reference results TODO: welcome to
-        # your_notebook.nbval.nbval.nbval.nbval.ipynb
+        # reference results
         nuname = re.sub('.ipynb$','.nbval.ipynb',str(self.fspath))
         with open(nuname, 'wt') as f:
             nbformat.write(self.nb, f)
