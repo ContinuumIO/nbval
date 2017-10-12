@@ -41,3 +41,8 @@ comparers[pandas.DataFrame] = arraylike_equal
 comparers[numpy.ndarray] = arraylike_equal
 comparers[holoviews.core.element.Element] = hv_equal
 
+# TODO: this should be in nbval rather than here. maybe there should
+# be an exclude list. or maybe there should be a dump exclude list
+# instead. or maybe a dump include list.
+import IPython.core.display
+comparers[IPython.core.display.DisplayObject] = False

@@ -89,7 +89,8 @@ def pytest_addoption(parser):
     # that apply to nbval. Maybe. Not sure it's the best idea or that
     # things were consistent before.
     group.addoption('--nbval-require-ref-data', action='store_true',
-                    help='Require that cells have reference data.')
+                    # TODO: try to do something about no-output case?
+                    help='Require that a cell has reference data, unless it has no output.')
     
     # TODO: might want multiple files
     group.addoption('--data-handlers',
@@ -358,6 +359,9 @@ def compare(test,ref):
         return default_comparer
 
     comparer = get_comparer(type(ref))
+    if comparer is False:
+        comparer = lambda test,ref: True
+        
     return comparer(test,ref)
 
 ############################################################
