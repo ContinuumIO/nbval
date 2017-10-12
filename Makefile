@@ -34,4 +34,4 @@ release: build-dists
 
 
 install-test-deps:
-	pip install matplotlib sympy holoviews bokeh
+	pip install matplotlib sympy

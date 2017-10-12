@@ -1,7 +1,7 @@
 language: python
 
 python:
-  - "nightly"
+#  - "nightly"
   - "3.6"
 #  - "3.5"
 #  - "3.4"
@@ -23,6 +23,8 @@ install:
   - pip install sympy
   # and some use matplotlib
   - pip install matplotlib
+  # and I care about...
+  - pip install numpy pandas holoviews bokeh
   # and coverage
   - pip install pytest-cov
 
