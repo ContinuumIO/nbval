@@ -352,7 +352,7 @@ def default_comparer(test,ref):
 def compare(test,ref):
 
     def get_comparer(x):
-        for class_ in inspect.getmro(x)[::-1]:
+        for class_ in inspect.getmro(x):
             if class_ in comparers:
                 return comparers[class_]
         return default_comparer
@@ -397,6 +397,7 @@ dumpers[object] = pickle.dumps
 def get_dumper(handler):
 
     def dumper(x):
+        # TODO: consider compressing
         return {'data': base64.b64encode(handler(x)).decode('utf-8')}
 
     return dumper
