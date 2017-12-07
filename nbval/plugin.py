@@ -95,6 +95,11 @@ def pytest_addoption(parser):
     # TODO: might want multiple files
     group.addoption('--data-handlers',
                     help='Functions xxx...')
+
+    # TODO: quick hack for project where I need to run only data
+    # tests; should decide what to do.
+    group.addoption('--data-only', action='store_true',
+                    help="Restrict to data tests only.")
     
 
     term_group = parser.getgroup("terminal reporting")
@@ -238,7 +243,10 @@ class IPyNbFile(pytest.File):
         else:
             kernel_name = self.nb.metadata.get(
                 'kernelspec', {}).get('name', 'python')
-        self.kernel = RunningKernel(kernel_name, str(self.fspath.dirname))
+        # TODO: it's a real hack (some stuff needs to be in kernel's
+        # python; need to clean up what handlers to have and how to
+        # register them)
+        self.kernel = RunningKernel(kernel_name, str(self.fspath.dirname), open(self.parent.config.option.data_handlers).read())
         self.setup_sanitize_files()
         self.setup_data_handlers()
 
@@ -248,7 +256,7 @@ class IPyNbFile(pytest.File):
 
     def setup_data_handlers(self):
         if self.parent.config.option.data_handlers is not None:
-            # TODO: probably need to handle path better
+            # TODO: probably need to handle path better            
             exec(open(self.parent.config.option.data_handlers).read())
 
 
@@ -391,12 +399,19 @@ import pickle
 import base64
 
 dumpers = {}
-
 dumpers[object] = pickle.dumps
+# TODO: reorganize registering of handlers etc
+
+import IPython.core.display
 
 def get_dumper(handler):
 
     def dumper(x):
+
+        # TODO: hack to avoid including in data tests
+        if isinstance(x,IPython.core.display.HTML):
+            return None
+        
         # TODO: consider compressing
         return {'data': base64.b64encode(handler(x)).decode('utf-8')}
 
@@ -460,6 +475,8 @@ class IPyNbCell(pytest.Item):
         test = transform_streams_for_comparison(test)
         ref = transform_streams_for_comparison(ref)
 
+        # TODO: consider simplifying this reformatting
+
         # We reformat outputs into a dictionaries where
         # key:
         #   - all keys on output except 'data' and those in skip_compare
@@ -472,9 +489,12 @@ class IPyNbCell(pytest.Item):
         # a key.
         testing_outs = defaultdict(list)
         reference_outs = defaultdict(list)
-        
+
         for reference in ref:
             for key in reference.keys():
+                # TODO: quick hack support data tests only
+                if self.parent.parent.config.option.data_only and key!='data':
+                    continue
                 # We discard the keys from the skip_compare list:
                 if key not in skip_compare:
                     # Flatten out MIME types from data of display_data and execute_result
@@ -491,14 +511,13 @@ class IPyNbCell(pytest.Item):
                         # existing ones to be compared
                         reference_outs[key].append(self.sanitize(reference[key]))
 
-        if len(reference_outs) > 0 and self.parent.config.option.nbval_require_ref_data:
-            if DATA_MIME_TYPE not in reference_outs:
-                self.raise_cell_error("Missing reference data.")
-                # the end
-                        
+
         # the same for the testing outputs (the cells that are being executed)
         for testing in test:
             for key in testing.keys():
+                # TODO: quick hack support data tests only
+                if self.parent.parent.config.option.data_only and key!='data':                
+                    continue                
                 if key not in skip_compare:
                     if key == 'data':
                         for data_key in testing[key].keys():
@@ -507,6 +526,13 @@ class IPyNbCell(pytest.Item):
                     else:
                         testing_outs[key].append(self.sanitize(testing[key]))
 
+
+        if self.parent.config.option.nbval_require_ref_data:
+            if (DATA_MIME_TYPE in testing_outs) and (DATA_MIME_TYPE not in reference_outs):
+                self.raise_cell_error("Missing reference data.")
+                # the end
+
+                        
         # The traceback from the comparison will be stored here.
         self.comparison_traceback = []
 
@@ -611,6 +637,11 @@ class IPyNbCell(pytest.Item):
         if self.options['skip']:
             pytest.skip()
 
+        # TODO: make it a flag, and just silently ignore empty source
+        # cells by default?
+        if len(self.cell.source)==0:
+            pytest.skip()
+            
         # store reference outputs so they're not overwritten when
         # cell is run...
         import copy
