@@ -80,7 +80,7 @@ class RunningKernel(object):
     """
     # CEBALERT: what does the below 'matplotlib is inline' comment
     # mean?
-    def __init__(self, kernel_name, cwd=None):
+    def __init__(self, kernel_name, cwd=None, setup_setup_code=""):
         """
         Initialise a new kernel
         specify that matplotlib is inline and connect the stderr.
@@ -95,6 +95,8 @@ class RunningKernel(object):
 
         self._ensure_iopub_up()
 
+        # TODO: allow setup code to be registered and clean up the
+        # setup_setup_code hack.
         setup_code = """
 from IPython.core.formatters import JSONFormatter as JF
 from nbval.plugin import dumpers, get_dumper
@@ -105,7 +107,7 @@ for type_, dumper in dumpers.items():
     our_formatter.for_type(type_, get_dumper(dumper))
 """%DATA_MIME_TYPE
 
-        self.kc.execute(setup_code,
+        self.kc.execute(setup_setup_code + "\n" + setup_code,
                         silent=False, #TODO True,
                         store_history=False,
                         allow_stdin=False,
