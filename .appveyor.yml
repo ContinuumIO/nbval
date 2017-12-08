@@ -14,7 +14,7 @@ environment:
 install:
   - "%PYTHON%/Scripts/easy_install -U pip"
   - "%PYTHON%/Scripts/pip install --upgrade setuptools pip"
-  - "%PYTHON%/Scripts/pip install pytest"
+  - "%PYTHON%/Scripts/pip install pytest pytest-cov"
   - "%PYTHON%/Scripts/pip install ."
   - "%PYTHON%/Scripts/pip install sympy matplotlib numpy pandas holoviews bokeh"
 
