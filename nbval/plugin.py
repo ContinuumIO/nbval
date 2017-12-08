@@ -246,7 +246,8 @@ class IPyNbFile(pytest.File):
         # TODO: it's a real hack (some stuff needs to be in kernel's
         # python; need to clean up what handlers to have and how to
         # register them)
-        self.kernel = RunningKernel(kernel_name, str(self.fspath.dirname), open(self.parent.config.option.data_handlers).read())
+        setup_setup_code = open(self.parent.config.option.data_handlers).read() if self.parent.config.option.data_handlers else ""
+        self.kernel = RunningKernel(kernel_name, str(self.fspath.dirname), setup_setup_code)
         self.setup_sanitize_files()
         self.setup_data_handlers()
 
@@ -256,7 +257,7 @@ class IPyNbFile(pytest.File):
 
     def setup_data_handlers(self):
         if self.parent.config.option.data_handlers is not None:
-            # TODO: probably need to handle path better            
+            # TODO: probably need to handle path better
             exec(open(self.parent.config.option.data_handlers).read())
 
 
@@ -400,7 +401,11 @@ import base64
 
 dumpers = {}
 dumpers[object] = pickle.dumps
-# TODO: reorganize registering of handlers etc
+# TODO: reorganize registering of handlers etc.
+
+# maybe there should be an exclude list. or maybe there should be a
+# dump exclude list instead. or maybe a dump include list.
+
 
 import IPython.core.display
 
