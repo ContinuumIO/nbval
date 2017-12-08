@@ -21,8 +21,24 @@ install:
 build: false
 
 test_script:
-#  - cmd: "%PYTHON%/Scripts/tox -e %TOX_ENV%"
+# original tests
   - cmd: "%PYTHON%/Scripts/pytest -v tests --nbval --current-env --sanitize-with tests/sanitize_defaults.cfg --ignore tests/ipynb-test-samples"
+############################################################
+# should pass
+  - cmd: "%PYTHON%/Scripts/pytest -v tests2/ --nbval-require-ref-data --current-env --data-handlers=myhandlers.py"
+# should fail
+  #! py.test -v tests3/data_has_changed.ipynb	 --nbval-require-ref-data --current-env --data-handlers=myhandlers.py
+############################################################
+## test presence/absence of reference data
+# should fail
+  #! py.test -v tests3/missing_reference_data.ipynb --nbval-require-ref-data --current-env --data-handlers=myhandlers.py
+# should pass
+  - cmd: "%PYTHON%/Scripts/pytest -v tests3/missing_reference_data.ipynb --nbval --current-env --data-handlers=myhandlers.py"
+# ...and should now pass
+  - cmd: "copy tests3/missing_reference_data.nbval.ipynb tests3/now_has_reference_data.ipynb"
+  - cmd: "%PYTHON%/Scripts/pytest -v tests3/now_has_reference_data.ipynb --nbval-require-ref-data --current-env --data-handlers=myhandlers.py"
+############################################################
+
 
 #after_test:
 #  - "%PYTHON%/python setup.py bdist_wheel --universal"
