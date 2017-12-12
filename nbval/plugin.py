@@ -5,6 +5,10 @@ Authors: D. Cortes, O. Laslett, T. Kluyver, H. Fangohr, V.T. Fauske
 
 """
 
+# TODO
+# * check unicode (python 2.7, windows)
+#
+
 from __future__ import print_function
 
 # import the pytest API
@@ -339,7 +343,7 @@ class IPyNbFile(pytest.File):
         # always store the new results; might want to replace the
         # reference results
         nuname = re.sub('.ipynb$','.nbval.ipynb',str(self.fspath))
-        with open(nuname, 'wt') as f:
+        with open(nuname, 'wt', encoding='utf-8') as f:
             nbformat.write(self.nb, f)
 
         if self.kernel is not None and self.kernel.is_alive():
