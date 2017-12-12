@@ -35,7 +35,7 @@ test_script:
 # should pass
   - cmd: "%PYTHON%/Scripts/pytest -v tests3/missing_reference_data.ipynb --nbval --current-env --data-handlers=myhandlers.py"
 # ...and should now pass
-  - cmd: "copy tests3/missing_reference_data.nbval.ipynb tests3/now_has_reference_data.ipynb"
+  - cmd: "copy tests3\\missing_reference_data.nbval.ipynb tests3\\now_has_reference_data.ipynb"
   - cmd: "%PYTHON%/Scripts/pytest -v tests3/now_has_reference_data.ipynb --nbval-require-ref-data --current-env --data-handlers=myhandlers.py"
 ############################################################
 
